@@ -36,3 +36,4 @@ export const CallHistory: React.FC<CallHistoryProps> = ({ calls }) => {
     </div>
   );
 };
+

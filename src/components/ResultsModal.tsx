@@ -154,3 +154,4 @@ export const ResultsModal: React.FC<ResultsModalProps> = ({
     </div>
   );
 };
+

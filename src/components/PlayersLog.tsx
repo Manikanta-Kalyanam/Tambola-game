@@ -105,3 +105,4 @@ export const PlayersLog: React.FC<PlayersLogProps> = ({ players, claimsLog, myPl
     </div>
   );
 };
+

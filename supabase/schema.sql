@@ -91,3 +91,4 @@ CREATE POLICY "Server only room update" ON public.rooms FOR UPDATE USING (false)
 CREATE POLICY "Server only player insert" ON public.players FOR INSERT WITH CHECK (false);
 CREATE POLICY "Server only call insert" ON public.calls FOR INSERT WITH CHECK (false);
 CREATE POLICY "Server only claim insert" ON public.claims FOR INSERT WITH CHECK (false);
+

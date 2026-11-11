@@ -183,3 +183,4 @@ export const ClaimsBar: React.FC<ClaimsBarProps> = ({ winners, myPlayerId, onCla
     </div>
   );
 };
+

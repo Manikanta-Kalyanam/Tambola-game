@@ -81,3 +81,4 @@ export const BoardView: React.FC<BoardViewProps> = ({ calledNumbersSet, currentN
     </div>
   );
 };
+

@@ -188,3 +188,4 @@ export const TicketView: React.FC<TicketViewProps> = ({
     </div>
   );
 };
+

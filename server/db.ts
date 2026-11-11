@@ -103,3 +103,4 @@ export function saveDb(): void {
     console.error('Failed to save SQLite database to disk:', err);
   }
 }
+

@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
+import os from 'os';
 import {
   createRoom,
   joinRoom,
@@ -249,9 +250,41 @@ app.get('*', (req: Request, res: Response) => {
   });
 });
 
-// Initialize database and start server
+function getNetworkAddresses(): string[] {
+  const interfaces = os.networkInterfaces();
+  const addresses: string[] = [];
+  for (const name of Object.keys(interfaces)) {
+    for (const net of interfaces[name] || []) {
+      if (net.family === 'IPv4' && !net.internal) {
+        addresses.push(net.address);
+      }
+    }
+  }
+  return addresses;
+}
+
+// Initialize database and start server on 0.0.0.0 for LAN access
 getDb().then(() => {
-  app.listen(PORT, () => {
-    console.log(`🎯 Tambola Server running on port ${PORT}`);
+  const server = app.listen(Number(PORT), '0.0.0.0', () => {
+    const netAddrs = getNetworkAddresses();
+    console.log('\n======================================================');
+    console.log(`🎯 Tambola Multiplayer Server Running!`);
+    console.log(`🏠 Local:   http://localhost:${PORT}`);
+    if (netAddrs.length > 0) {
+      netAddrs.forEach((ip) => {
+        console.log(`🌐 Network: http://${ip}:${PORT}  (Phones/laptops on same Wi-Fi)`);
+      });
+    }
+    console.log('======================================================\n');
+  });
+
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\n❌ Port ${PORT} is already in use by another process.`);
+      console.error(`Run 'fuser -k ${PORT}/tcp' or 'kill $(lsof -t -i:${PORT})' to free the port.\n`);
+    } else {
+      console.error('Server error:', err);
+    }
   });
 });
+

@@ -58,3 +58,4 @@ export const CurrentBall: React.FC<CurrentBallProps> = ({ currentNumber, callOrd
     </div>
   );
 };
+

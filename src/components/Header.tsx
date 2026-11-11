@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Volume2, VolumeX, Copy, Check, Trophy, LogOut, Radio, Crown } from 'lucide-react';
+import { Volume2, VolumeX, Copy, Check, Trophy, LogOut, Radio, Crown, Share2 } from 'lucide-react';
 import { getIsMuted, setIsMuted } from '../utils/audio';
 
 interface HeaderProps {
@@ -21,13 +21,21 @@ export const Header: React.FC<HeaderProps> = ({
   isConnected,
   totalCalls,
 }) => {
-  const [copied, setCopied] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [muted, setMutedState] = useState(getIsMuted());
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(roomCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const handleCopyLink = () => {
+    const shareUrl = `${window.location.origin}/?room=${roomCode}`;
+    navigator.clipboard.writeText(shareUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
   };
 
   const toggleSound = () => {
@@ -70,10 +78,29 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <span className="text-slate-400 uppercase tracking-wider text-[10px]">ROOM:</span>
             <span className="text-amber-400 tracking-wider text-sm">{roomCode}</span>
-            {copied ? (
+            {copiedCode ? (
               <Check className="w-3.5 h-3.5 text-emerald-400" />
             ) : (
               <Copy className="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition-colors" />
+            )}
+          </button>
+
+          {/* Copy Invite Link */}
+          <button
+            onClick={handleCopyLink}
+            title="Copy Invite Link to share on WhatsApp or Network"
+            className="hidden sm:flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white transition-all active:scale-95"
+          >
+            {copiedLink ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-emerald-400 text-[11px] font-bold">Link Copied!</span>
+              </>
+            ) : (
+              <>
+                <Share2 className="w-3.5 h-3.5 text-rose-400" />
+                <span className="text-[11px]">Share Link</span>
+              </>
             )}
           </button>
         </div>
@@ -127,3 +154,4 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
+

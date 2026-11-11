@@ -145,3 +145,4 @@ export function speakNumber(num: number): void {
   utterance.pitch = 1.0;
   window.speechSynthesis.speak(utterance);
 }
+
