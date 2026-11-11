@@ -116,4 +116,43 @@ describe('Server & Game Actions End-to-End Test', () => {
     expect(reconnected.tickets.length).toBe(3);
     expect(reconnected.tickets).toEqual(bobTickets);
   });
+
+  it('correctly handles non-playing host with 0 tickets (caller-only mode)', async () => {
+    // 1. Host creates room with ticketCount = 0
+    const hostCreated = await createRoom('Caller Only Host', 0);
+    expect(hostCreated.roomCode).toBeDefined();
+    expect(hostCreated.player.isHost).toBe(true);
+    expect(hostCreated.player.tickets).toEqual([]);
+    expect(hostCreated.player.tickets.length).toBe(0);
+
+    const roomCode = hostCreated.roomCode;
+    const hostToken = hostCreated.hostToken;
+    const hostPlayerToken = hostCreated.playerToken;
+
+    // 2. Room state verifies host has ticketCount = 0
+    const state = await getRoomState(roomCode, hostPlayerToken);
+    expect(state?.players[0].ticketCount).toBe(0);
+    expect(state?.myPlayer?.tickets).toEqual([]);
+
+    // 3. Reconnecting host returns 0 tickets
+    const reconnectedHost = await reconnectPlayer(roomCode, hostPlayerToken);
+    expect(reconnectedHost.tickets).toEqual([]);
+    expect(reconnectedHost.tickets.length).toBe(0);
+
+    // 4. Host cannot claim prizes with 0 tickets
+    const claimRes = await claimPrize(roomCode, hostPlayerToken, 'early_five');
+    expect(claimRes.accepted).toBe(false);
+    expect(claimRes.status).toBe('rejected_bogey');
+    expect(claimRes.message).toContain('Caller Only Mode');
+
+    // 5. Normal player joins and receives tickets
+    const player = await joinRoom(roomCode, 'Player Dave', 2);
+    expect(player.player.tickets.length).toBe(2);
+
+    // 6. Resetting room maintains 0 tickets for caller host
+    await resetRoom(roomCode, hostToken);
+    const stateAfterReset = await getRoomState(roomCode, hostPlayerToken);
+    expect(stateAfterReset?.players.find((p) => p.isHost)?.ticketCount).toBe(0);
+    expect(stateAfterReset?.myPlayer?.tickets.length).toBe(0);
+  });
 });

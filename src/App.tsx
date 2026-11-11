@@ -28,6 +28,7 @@ import {
 } from './utils/api';
 import { RoomState, TicketGrid, PrizeType, RoomRewards } from './shared/types';
 import { playNumberDrawnSound, speakNumber } from './utils/audio';
+import { getNumberCallDisplay } from './shared/tambola';
 import { Ticket, Trophy, Grid, Users } from 'lucide-react';
 
 export function App() {
@@ -108,7 +109,7 @@ export function App() {
         }
 
         // If server provided myPlayer with tickets
-        if (newState.myPlayer?.tickets && newState.myPlayer.tickets.length > 0) {
+        if (newState.myPlayer?.tickets !== undefined) {
           setMyTickets(newState.myPlayer.tickets);
         }
 
@@ -190,7 +191,7 @@ export function App() {
       };
       saveSession(newSession);
       setSession(newSession);
-      setMyTickets(res.player.tickets || [res.player.ticket]);
+      setMyTickets(res.player.tickets ?? (res.player.ticket ? [res.player.ticket] : []));
       setDabs(new Set());
 
       const state = await apiGetRoomState(res.roomCode, res.playerToken);
@@ -216,7 +217,7 @@ export function App() {
       };
       saveSession(newSession);
       setSession(newSession);
-      setMyTickets(res.player.tickets || [res.player.ticket]);
+      setMyTickets(res.player.tickets ?? (res.player.ticket ? [res.player.ticket] : []));
       setDabs(new Set());
 
       const state = await apiGetRoomState(res.roomCode, res.playerToken);
@@ -234,7 +235,7 @@ export function App() {
     try {
       const res = await apiReconnect(saved.roomCode, saved.playerToken);
       setSession(saved);
-      setMyTickets(res.player.tickets || (res.player.ticket ? [res.player.ticket] : []));
+      setMyTickets(res.player.tickets ?? (res.player.ticket ? [res.player.ticket] : []));
       setRoomState(res.roomState);
       setDabs(getSavedDabs(saved.roomCode));
     } catch (err: any) {
@@ -347,7 +348,7 @@ export function App() {
   const unclaimedPrizesCount = 5 - Object.keys(roomState.winners || {}).length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-rose-500 selection:text-white pb-20 sm:pb-6">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-rose-500 selection:text-white pb-28 sm:pb-8">
       {/* Header Bar */}
       <Header
         roomCode={session.roomCode}
@@ -358,6 +359,48 @@ export function App() {
         isConnected={isConnected}
         totalCalls={roomState.calls.length}
       />
+
+      {/* Sticky Active Ball Bar - Visible when scrolling down so players never lose sight of called numbers */}
+      <div className="sticky top-[57px] z-30 bg-slate-900/95 border-b border-slate-800/90 px-3 py-2 backdrop-blur-md shadow-md">
+        <div className="max-w-lg sm:max-w-4xl w-full mx-auto flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            {roomState.currentNumber !== null ? (
+              <>
+                <div className="w-8 h-8 rounded-full bingo-ball flex-shrink-0 flex items-center justify-center shadow-md">
+                  <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center">
+                    <span className="font-mono font-black text-xs text-slate-950">
+                      {roomState.currentNumber}
+                    </span>
+                  </div>
+                </div>
+                <div className="overflow-hidden">
+                  <div className="text-xs sm:text-sm font-bold text-amber-300 font-mono truncate">
+                    {getNumberCallDisplay(roomState.currentNumber)}
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-mono">
+                    Ball #{roomState.calls.length} of 90
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center gap-2 text-slate-400 text-xs font-mono">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                <span>Ready! Waiting for host to call first ball...</span>
+              </div>
+            )}
+          </div>
+
+          {session.isHost && (
+            <button
+              onClick={handleCallNumber}
+              disabled={callingNumber || roomState.calls.length >= 90}
+              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 active:scale-95 text-white font-bold text-xs flex items-center gap-1 shadow-md transition-all flex-shrink-0 disabled:opacity-50"
+            >
+              <span>Draw Next</span>
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Main Mobile-First Container */}
       <main className="flex-1 max-w-lg sm:max-w-4xl w-full mx-auto p-3 sm:p-5 space-y-3.5">

@@ -60,7 +60,10 @@ export async function broadcastRoomState(code: string): Promise<void> {
 function parseTickets(raw: string): TicketGrid[] {
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
+    if (Array.isArray(parsed)) {
+      if (parsed.length === 0) {
+        return []; // Non-playing host has 0 tickets
+      }
       if (Array.isArray(parsed[0]) && Array.isArray(parsed[0][0])) {
         // It's TicketGrid[]
         return parsed as TicketGrid[];
@@ -68,9 +71,9 @@ function parseTickets(raw: string): TicketGrid[] {
       // It's a single TicketGrid
       return [parsed as TicketGrid];
     }
-    return [generateTambolaTicket()];
+    return [];
   } catch {
-    return [generateTambolaTicket()];
+    return [];
   }
 }
 
@@ -490,6 +493,16 @@ export async function claimPrize(
 
   const [playerId, playerName, ticketJson] = playerRes[0].values[0] as [string, string, string];
   const tickets = parseTickets(ticketJson);
+
+  if (tickets.length === 0) {
+    return {
+      accepted: false,
+      status: 'rejected_bogey',
+      prizeType,
+      message: 'You are playing in Host / Caller Only Mode with no tickets.',
+      matchingNumbers: [],
+    };
+  }
 
   // Check if this prize is ALREADY accepted in this room
   const existingWinnerRes = db.exec(

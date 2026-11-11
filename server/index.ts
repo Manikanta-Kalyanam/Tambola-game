@@ -57,7 +57,13 @@ function manageAutoCallTimer(code: string, speed: number, hostToken: string) {
 app.post('/api/rooms', async (req: Request, res: Response) => {
   try {
     const { hostName, ticketCount, rewards } = req.body;
-    const result = await createRoom(hostName || 'Host', ticketCount || 1, rewards);
+    const count =
+      typeof ticketCount === 'number'
+        ? ticketCount
+        : ticketCount !== undefined && ticketCount !== null && ticketCount !== ''
+        ? Number(ticketCount)
+        : 1;
+    const result = await createRoom(hostName || 'Host', count, rewards);
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
