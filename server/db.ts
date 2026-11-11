@@ -50,6 +50,7 @@ export async function getDb(): Promise<Database> {
       status TEXT NOT NULL DEFAULT 'waiting',
       current_number INTEGER,
       auto_call_speed INTEGER NOT NULL DEFAULT 0,
+      rewards_json TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -88,6 +89,11 @@ export async function getDb(): Promise<Database> {
       FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
     );
   `);
+
+  // Safe migration for rewards_json if existing DB
+  try {
+    db.run(`ALTER TABLE rooms ADD COLUMN rewards_json TEXT`);
+  } catch {}
 
   saveDb();
   return db;

@@ -16,6 +16,7 @@ import {
   apiGetRoomState,
   apiCallNumber,
   apiSetAutoCallSpeed,
+  apiUpdateRewards,
   apiClaimPrize,
   apiResetRoom,
   saveSession,
@@ -25,19 +26,23 @@ import {
   getSavedDabs,
   StoredSession,
 } from './utils/api';
-import { RoomState, TicketGrid, PrizeType } from './shared/types';
+import { RoomState, TicketGrid, PrizeType, RoomRewards } from './shared/types';
 import { playNumberDrawnSound, speakNumber } from './utils/audio';
+import { Ticket, Trophy, Grid, Users } from 'lucide-react';
 
 export function App() {
   const [session, setSession] = useState<StoredSession | null>(null);
   const [roomState, setRoomState] = useState<RoomState | null>(null);
-  const [myTicket, setMyTicket] = useState<TicketGrid | null>(null);
-  const [dabs, setDabs] = useState<Set<number>>(new Set());
+  const [myTickets, setMyTickets] = useState<TicketGrid[]>([]);
+  const [dabs, setDabs] = useState<Set<string>>(new Set());
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [callingNumber, setCallingNumber] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showResultsModal, setShowResultsModal] = useState(false);
+
+  // Mobile navigation tab: 'tickets' | 'prizes' | 'board' | 'players'
+  const [mobileTab, setMobileTab] = useState<'tickets' | 'prizes' | 'board' | 'players'>('tickets');
 
   const prevLastCallRef = useRef<number | null>(null);
 
@@ -93,9 +98,9 @@ export function App() {
           speakNumber(newState.currentNumber);
         }
 
-        // If server provided myPlayer with ticket
-        if (newState.myPlayer?.ticket) {
-          setMyTicket(newState.myPlayer.ticket);
+        // If server provided myPlayer with tickets
+        if (newState.myPlayer?.tickets && newState.myPlayer.tickets.length > 0) {
+          setMyTickets(newState.myPlayer.tickets);
         }
 
         return newState;
@@ -125,7 +130,6 @@ export function App() {
           if (isSubscribed) {
             setIsConnected(false);
             eventSource?.close();
-            // Start polling as fallback
             startPolling();
           }
         };
@@ -158,11 +162,15 @@ export function App() {
   }, [session?.roomCode, session?.playerToken]);
 
   // Actions
-  const handleCreateRoom = async (hostName: string) => {
+  const handleCreateRoom = async (
+    hostName: string,
+    ticketCount: number,
+    rewards: RoomRewards
+  ) => {
     setLoading(true);
     setErrorMessage(null);
     try {
-      const res = await apiCreateRoom(hostName);
+      const res = await apiCreateRoom(hostName, ticketCount, rewards);
       const newSession: StoredSession = {
         roomCode: res.roomCode,
         playerToken: res.playerToken,
@@ -173,10 +181,9 @@ export function App() {
       };
       saveSession(newSession);
       setSession(newSession);
-      setMyTicket(res.player.ticket);
+      setMyTickets(res.player.tickets || [res.player.ticket]);
       setDabs(new Set());
 
-      // Fetch initial room state
       const state = await apiGetRoomState(res.roomCode, res.playerToken);
       setRoomState(state);
     } catch (err: any) {
@@ -186,11 +193,11 @@ export function App() {
     }
   };
 
-  const handleJoinRoom = async (code: string, name: string) => {
+  const handleJoinRoom = async (code: string, name: string, ticketCount: number) => {
     setLoading(true);
     setErrorMessage(null);
     try {
-      const res = await apiJoinRoom(code, name);
+      const res = await apiJoinRoom(code, name, ticketCount);
       const newSession: StoredSession = {
         roomCode: res.roomCode,
         playerToken: res.playerToken,
@@ -200,7 +207,7 @@ export function App() {
       };
       saveSession(newSession);
       setSession(newSession);
-      setMyTicket(res.player.ticket);
+      setMyTickets(res.player.tickets || [res.player.ticket]);
       setDabs(new Set());
 
       const state = await apiGetRoomState(res.roomCode, res.playerToken);
@@ -218,7 +225,7 @@ export function App() {
     try {
       const res = await apiReconnect(saved.roomCode, saved.playerToken);
       setSession(saved);
-      setMyTicket(res.player.ticket);
+      setMyTickets(res.player.tickets || (res.player.ticket ? [res.player.ticket] : []));
       setRoomState(res.roomState);
       setDabs(getSavedDabs(saved.roomCode));
     } catch (err: any) {
@@ -233,31 +240,34 @@ export function App() {
     clearSavedSession();
     setSession(null);
     setRoomState(null);
-    setMyTicket(null);
+    setMyTickets([]);
     setDabs(new Set());
     prevLastCallRef.current = null;
   };
 
-  const handleToggleDab = (num: number) => {
+  const handleToggleDab = (ticketIdx: number, num: number) => {
+    const key = `${ticketIdx}_${num}`;
     setDabs((prev) => {
       const next = new Set(prev);
-      if (next.has(num)) {
-        next.delete(num);
+      if (next.has(key)) {
+        next.delete(key);
       } else {
-        next.add(num);
+        next.add(key);
       }
       return next;
     });
   };
 
-  const handleAutoDabAllCalled = () => {
-    if (!myTicket) return;
+  const handleAutoDabAllCalled = (ticketIdx: number) => {
+    const targetTicket = myTickets[ticketIdx];
+    if (!targetTicket) return;
+
     setDabs((prev) => {
       const next = new Set(prev);
-      for (const row of myTicket) {
+      for (const row of targetTicket) {
         for (const val of row) {
           if (val !== null && calledNumbersSet.has(val)) {
-            next.add(val);
+            next.add(`${ticketIdx}_${val}`);
           }
         }
       }
@@ -283,6 +293,15 @@ export function App() {
       await apiSetAutoCallSpeed(session.roomCode, session.hostToken, speed);
     } catch (err: any) {
       alert(err.message || 'Error updating auto-caller speed');
+    }
+  };
+
+  const handleUpdateRewards = async (rewards: RoomRewards) => {
+    if (!session?.hostToken) return;
+    try {
+      await apiUpdateRewards(session.roomCode, session.hostToken, rewards);
+    } catch (err: any) {
+      alert(err.message || 'Error updating rewards');
     }
   };
 
@@ -316,8 +335,10 @@ export function App() {
     );
   }
 
+  const unclaimedPrizesCount = 5 - Object.keys(roomState.winners || {}).length;
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-rose-500 selection:text-white">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-rose-500 selection:text-white pb-20 sm:pb-6">
       {/* Header Bar */}
       <Header
         roomCode={session.roomCode}
@@ -329,14 +350,16 @@ export function App() {
         totalCalls={roomState.calls.length}
       />
 
-      {/* Main Game Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+      {/* Main Mobile-First Container */}
+      <main className="flex-1 max-w-lg sm:max-w-4xl w-full mx-auto p-3 sm:p-5 space-y-3.5">
         {/* Host Controls Console (if Host) */}
         {session.isHost && (
           <HostControls
             onCallNumber={handleCallNumber}
             onSetAutoCallSpeed={handleSetAutoCallSpeed}
             onResetGame={handleResetGame}
+            onUpdateRewards={handleUpdateRewards}
+            currentRewards={roomState.rewards}
             autoCallSpeed={roomState.autoCallSpeed}
             totalCalls={roomState.calls.length}
             callingNumber={callingNumber}
@@ -344,54 +367,123 @@ export function App() {
           />
         )}
 
-        {/* Top Split: Current Number Spotlight & Call History Reel */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
-          <div className="lg:col-span-1">
+        {/* Compact Current Ball Spotlight & Recent Calls Reel */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-stretch">
+          <div className="sm:col-span-1">
             <CurrentBall
               currentNumber={roomState.currentNumber}
               callOrder={roomState.calls.length}
               totalCalls={roomState.calls.length}
             />
           </div>
-          <div className="lg:col-span-2 flex flex-col justify-between gap-4">
+          <div className="sm:col-span-2 flex flex-col justify-between gap-2.5">
             <CallHistory calls={roomState.calls} />
+            {/* On desktop or tablet, board view stays visible; on mobile, also available via tab */}
+            <div className="hidden sm:block">
+              <BoardView
+                calledNumbersSet={calledNumbersSet}
+                currentNumber={roomState.currentNumber}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile Tab Navigation Buttons */}
+        <div className="grid grid-cols-4 p-1 bg-slate-900 border border-slate-800 rounded-2xl sm:hidden">
+          <button
+            onClick={() => setMobileTab('tickets')}
+            className={`py-2 rounded-xl text-[11px] font-bold flex flex-col items-center gap-0.5 transition-all ${
+              mobileTab === 'tickets'
+                ? 'bg-rose-600 text-white shadow'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Ticket className="w-4 h-4" />
+            <span>Tickets ({myTickets.length})</span>
+          </button>
+          <button
+            onClick={() => setMobileTab('prizes')}
+            className={`py-2 rounded-xl text-[11px] font-bold flex flex-col items-center gap-0.5 transition-all ${
+              mobileTab === 'prizes'
+                ? 'bg-rose-600 text-white shadow'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Trophy className="w-4 h-4" />
+            <span>Prizes ({unclaimedPrizesCount})</span>
+          </button>
+          <button
+            onClick={() => setMobileTab('board')}
+            className={`py-2 rounded-xl text-[11px] font-bold flex flex-col items-center gap-0.5 transition-all ${
+              mobileTab === 'board'
+                ? 'bg-rose-600 text-white shadow'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Grid className="w-4 h-4" />
+            <span>1-90 Board</span>
+          </button>
+          <button
+            onClick={() => setMobileTab('players')}
+            className={`py-2 rounded-xl text-[11px] font-bold flex flex-col items-center gap-0.5 transition-all ${
+              mobileTab === 'players'
+                ? 'bg-rose-600 text-white shadow'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Feed ({roomState.players.length})</span>
+          </button>
+        </div>
+
+        {/* Tab Content for Mobile or Full Content for Desktop */}
+        <div className="space-y-3.5">
+          {/* 1. Ticket Section */}
+          <div className={`${mobileTab === 'tickets' ? 'block' : 'hidden sm:block'}`}>
+            {myTickets.length > 0 ? (
+              <TicketView
+                tickets={myTickets}
+                dabs={dabs}
+                calledNumbersSet={calledNumbersSet}
+                onToggleDab={handleToggleDab}
+                onAutoDabAllCalled={handleAutoDabAllCalled}
+                winningNumbersSet={winningNumbersSet}
+              />
+            ) : (
+              <div className="p-6 text-center bg-slate-900 border border-slate-800 rounded-3xl">
+                <div className="animate-spin w-7 h-7 border-2 border-rose-500 border-t-transparent rounded-full mx-auto mb-2" />
+                <p className="text-xs text-slate-400">Loading your Tambola ticket(s)...</p>
+              </div>
+            )}
+          </div>
+
+          {/* 2. Prizes & Claims Bar */}
+          <div className={`${mobileTab === 'prizes' ? 'block' : 'hidden sm:block'}`}>
+            <ClaimsBar
+              winners={roomState.winners}
+              rewards={roomState.rewards}
+              myPlayerId={session.playerId}
+              onClaim={handleClaimPrize}
+            />
+          </div>
+
+          {/* 3. 1-90 Master Board (mobile tab) */}
+          <div className={`${mobileTab === 'board' ? 'block' : 'hidden'} sm:hidden`}>
             <BoardView
               calledNumbersSet={calledNumbersSet}
               currentNumber={roomState.currentNumber}
             />
           </div>
-        </div>
 
-        {/* Player Ticket Section */}
-        {myTicket ? (
-          <TicketView
-            ticket={myTicket}
-            dabs={dabs}
-            calledNumbersSet={calledNumbersSet}
-            onToggleDab={handleToggleDab}
-            onAutoDabAllCalled={handleAutoDabAllCalled}
-            winningNumbersSet={winningNumbersSet}
-          />
-        ) : (
-          <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-3xl">
-            <div className="animate-spin w-8 h-8 border-2 border-rose-500 border-t-transparent rounded-full mx-auto mb-2" />
-            <p className="text-sm text-slate-400">Loading your Tambola ticket...</p>
+          {/* 4. Players & Activity Feed */}
+          <div className={`${mobileTab === 'players' ? 'block' : 'hidden sm:block'}`}>
+            <PlayersLog
+              players={roomState.players}
+              claimsLog={roomState.claimsLog}
+              myPlayerId={session.playerId}
+            />
           </div>
-        )}
-
-        {/* Auto-Verified Claims Bar */}
-        <ClaimsBar
-          winners={roomState.winners}
-          myPlayerId={session.playerId}
-          onClaim={handleClaimPrize}
-        />
-
-        {/* Players & Activity Log */}
-        <PlayersLog
-          players={roomState.players}
-          claimsLog={roomState.claimsLog}
-          myPlayerId={session.playerId}
-        />
+        </div>
       </main>
 
       {/* Results / Winners Modal */}
@@ -401,10 +493,10 @@ export function App() {
         winners={roomState.winners}
         calls={roomState.calls}
         roomCode={session.roomCode}
+        rewards={roomState.rewards}
       />
     </div>
   );
 }
 
 export default App;
-

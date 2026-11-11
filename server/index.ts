@@ -12,6 +12,7 @@ import {
   claimPrize,
   resetRoom,
   subscribeToRoom,
+  updateRewards,
 } from './game';
 import { getDb } from './db';
 import { PrizeType } from '../src/shared/types';
@@ -55,8 +56,8 @@ function manageAutoCallTimer(code: string, speed: number, hostToken: string) {
 // 1. Create Room
 app.post('/api/rooms', async (req: Request, res: Response) => {
   try {
-    const { hostName } = req.body;
-    const result = await createRoom(hostName || 'Host');
+    const { hostName, ticketCount, rewards } = req.body;
+    const result = await createRoom(hostName || 'Host', ticketCount || 1, rewards);
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -66,12 +67,33 @@ app.post('/api/rooms', async (req: Request, res: Response) => {
 // 2. Join Room
 app.post('/api/rooms/join', async (req: Request, res: Response) => {
   try {
-    const { code, name } = req.body;
+    const { code, name, ticketCount } = req.body;
     if (!code || !name) {
       return res.status(400).json({ error: 'Room code and display name are required' });
     }
-    const result = await joinRoom(code, name);
+    const result = await joinRoom(code, name, ticketCount || 1);
     res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Update Rewards / Pricing (Host only)
+app.post('/api/rooms/:code/rewards', async (req: Request, res: Response) => {
+  try {
+    const { code } = req.params;
+    const { rewards } = req.body;
+    const hostToken =
+      req.headers['x-host-token'] ||
+      req.headers.authorization?.replace(/^Bearer\s+/i, '') ||
+      req.body.hostToken;
+
+    if (!hostToken) {
+      return res.status(401).json({ error: 'Host token required' });
+    }
+
+    await updateRewards(code, hostToken as string, rewards);
+    res.json({ success: true, rewards });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }

@@ -1,6 +1,10 @@
 import crypto from 'crypto';
 import { getDb, saveDb, hashToken, generateToken, generateRoomCode } from './db';
-import { generateTambolaTicket, verifyClaim } from '../src/shared/tambola';
+import {
+  generateTambolaTicket,
+  generateMultipleTickets,
+  verifyClaimMultiTicket,
+} from '../src/shared/tambola';
 import {
   PrizeType,
   PRIZE_NAMES,
@@ -10,6 +14,8 @@ import {
   ClaimRecord,
   WinnerInfo,
   PlayerPublic,
+  RoomRewards,
+  DEFAULT_REWARDS,
 } from '../src/shared/types';
 
 // Map to hold Server-Sent Event (SSE) listeners for each room
@@ -51,12 +57,35 @@ export async function broadcastRoomState(code: string): Promise<void> {
   }
 }
 
+function parseTickets(raw: string): TicketGrid[] {
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed[0]) && Array.isArray(parsed[0][0])) {
+        // It's TicketGrid[]
+        return parsed as TicketGrid[];
+      }
+      // It's a single TicketGrid
+      return [parsed as TicketGrid];
+    }
+    return [generateTambolaTicket()];
+  } catch {
+    return [generateTambolaTicket()];
+  }
+}
+
 /**
- * Creates a new room and registers the host as the first player with a valid ticket.
+ * Creates a new room and registers the host as the first player with multiple tickets if requested.
  */
-export async function createRoom(hostName: string) {
+export async function createRoom(
+  hostName: string,
+  ticketCount: number = 1,
+  rewards?: RoomRewards
+) {
   const db = await getDb();
   const trimmedName = hostName.trim() || 'Host';
+  const safeCount = Math.max(1, Math.min(6, Math.floor(Number(ticketCount)) || 1));
+  const roomRewards: RoomRewards = { ...DEFAULT_REWARDS, ...(rewards || {}) };
 
   let code = generateRoomCode();
   // Ensure uniqueness
@@ -74,18 +103,18 @@ export async function createRoom(hostName: string) {
   const playerId = crypto.randomUUID();
   const now = new Date().toISOString();
 
-  const ticket = generateTambolaTicket();
+  const tickets = generateMultipleTickets(safeCount);
 
   db.run(
-    `INSERT INTO rooms (id, code, host_token_hash, status, current_number, auto_call_speed, created_at, updated_at)
-     VALUES (?, ?, ?, 'waiting', NULL, 0, ?, ?)`,
-    [roomId, code, hostTokenHash, now, now]
+    `INSERT INTO rooms (id, code, host_token_hash, status, current_number, auto_call_speed, rewards_json, created_at, updated_at)
+     VALUES (?, ?, ?, 'waiting', NULL, 0, ?, ?, ?)`,
+    [roomId, code, hostTokenHash, JSON.stringify(roomRewards), now, now]
   );
 
   db.run(
     `INSERT INTO players (id, room_id, name, player_token_hash, is_host, ticket_json, created_at)
      VALUES (?, ?, ?, ?, 1, ?, ?)`,
-    [playerId, roomId, trimmedName, playerTokenHash, JSON.stringify(ticket), now]
+    [playerId, roomId, trimmedName, playerTokenHash, JSON.stringify(tickets), now]
   );
 
   saveDb();
@@ -98,18 +127,19 @@ export async function createRoom(hostName: string) {
       id: playerId,
       name: trimmedName,
       isHost: true,
-      ticket,
+      tickets,
     },
   };
 }
 
 /**
- * Player joins an existing room. Receives a new valid ticket.
+ * Player joins an existing room. Receives multiple tickets if requested.
  */
-export async function joinRoom(code: string, playerName: string) {
+export async function joinRoom(code: string, playerName: string, ticketCount: number = 1) {
   const db = await getDb();
   const normCode = code.trim().toUpperCase();
   const trimmedName = playerName.trim() || 'Player';
+  const safeCount = Math.max(1, Math.min(6, Math.floor(Number(ticketCount)) || 1));
 
   const roomRes = db.exec(`SELECT id, status FROM rooms WHERE code = '${normCode}'`);
   if (!roomRes.length || !roomRes[0].values.length) {
@@ -124,13 +154,13 @@ export async function joinRoom(code: string, playerName: string) {
   const playerId = crypto.randomUUID();
   const playerToken = generateToken();
   const playerTokenHash = hashToken(playerToken);
-  const ticket = generateTambolaTicket();
+  const tickets = generateMultipleTickets(safeCount);
   const now = new Date().toISOString();
 
   db.run(
     `INSERT INTO players (id, room_id, name, player_token_hash, is_host, ticket_json, created_at)
      VALUES (?, ?, ?, ?, 0, ?, ?)`,
-    [playerId, roomId, trimmedName, playerTokenHash, JSON.stringify(ticket), now]
+    [playerId, roomId, trimmedName, playerTokenHash, JSON.stringify(tickets), now]
   );
 
   saveDb();
@@ -143,7 +173,7 @@ export async function joinRoom(code: string, playerName: string) {
       id: playerId,
       name: trimmedName,
       isHost: false,
-      ticket,
+      tickets,
     },
   };
 }
@@ -182,8 +212,29 @@ export async function reconnectPlayer(code: string, playerToken: string) {
     id,
     name,
     isHost: Boolean(isHost),
-    ticket: JSON.parse(ticketJson) as TicketGrid,
+    tickets: parseTickets(ticketJson),
   };
+}
+
+/**
+ * Host updates prize rewards / pricing.
+ */
+export async function updateRewards(code: string, hostToken: string, rewards: RoomRewards) {
+  const db = await getDb();
+  const normCode = code.trim().toUpperCase();
+  const hostHash = hashToken(hostToken);
+
+  const roomRes = db.exec(
+    `SELECT id FROM rooms WHERE code = '${normCode}' AND host_token_hash = '${hostHash}'`
+  );
+  if (!roomRes.length || !roomRes[0].values.length) {
+    throw new Error('Unauthorized: Invalid host token.');
+  }
+
+  const roomId = roomRes[0].values[0][0] as string;
+  db.run(`UPDATE rooms SET rewards_json = ? WHERE id = ?`, [JSON.stringify(rewards), roomId]);
+  saveDb();
+  broadcastRoomState(normCode);
 }
 
 /**
@@ -194,33 +245,39 @@ export async function getRoomState(code: string, playerToken?: string): Promise<
   const normCode = code.trim().toUpperCase();
 
   const roomRes = db.exec(
-    `SELECT id, code, status, current_number, auto_call_speed, created_at FROM rooms WHERE code = '${normCode}'`
+    `SELECT id, code, status, current_number, auto_call_speed, rewards_json, created_at FROM rooms WHERE code = '${normCode}'`
   );
   if (!roomRes.length || !roomRes[0].values.length) {
     return null;
   }
 
-  const [roomId, roomCode, status, currentNum, autoSpeed, createdAt] = roomRes[0].values[0] as [
+  const [roomId, roomCode, status, currentNum, autoSpeed, rewardsJson, createdAt] = roomRes[0]
+    .values[0] as [
     string,
     string,
     'waiting' | 'in_progress' | 'completed',
     number | null,
     number,
+    string | null,
     string
   ];
 
+  const rewards: RoomRewards = rewardsJson ? JSON.parse(rewardsJson) : DEFAULT_REWARDS;
+
   // Players
   const playersRes = db.exec(
-    `SELECT id, name, is_host, created_at FROM players WHERE room_id = '${roomId}' ORDER BY created_at ASC`
+    `SELECT id, name, is_host, ticket_json, created_at FROM players WHERE room_id = '${roomId}' ORDER BY created_at ASC`
   );
   const players: PlayerPublic[] = [];
   if (playersRes.length && playersRes[0].values.length) {
     for (const row of playersRes[0].values) {
+      const tickets = parseTickets(row[3] as string);
       players.push({
         id: row[0] as string,
         name: row[1] as string,
         isHost: Boolean(row[2]),
-        joinedAt: row[3] as string,
+        ticketCount: tickets.length,
+        joinedAt: row[4] as string,
       });
     }
   }
@@ -242,7 +299,7 @@ export async function getRoomState(code: string, playerToken?: string): Promise<
 
   // Accepted winners
   const winnersRes = db.exec(
-    `SELECT c.player_id, p.name, c.prize_type, c.created_at, c.numbers_json
+    `SELECT c.player_id, p.name, c.prize_type, c.created_at, c.numbers_json, c.message
      FROM claims c
      JOIN players p ON c.player_id = p.id
      WHERE c.room_id = '${roomId}' AND c.status = 'accepted'
@@ -252,12 +309,14 @@ export async function getRoomState(code: string, playerToken?: string): Promise<
   if (winnersRes.length && winnersRes[0].values.length) {
     for (const row of winnersRes[0].values) {
       const pType = row[2] as PrizeType;
+      const verified = JSON.parse(row[4] as string);
       winners[pType] = {
         playerId: row[0] as string,
         playerName: row[1] as string,
         prizeType: pType,
         claimedAt: row[3] as string,
-        verifiedNumbers: JSON.parse(row[4] as string),
+        verifiedNumbers: verified,
+        reward: rewards[pType] || '',
       };
     }
   }
@@ -303,6 +362,7 @@ export async function getRoomState(code: string, playerToken?: string): Promise<
     currentNumber: currentNum,
     autoCallSpeed: autoSpeed,
     createdAt,
+    rewards,
     players,
     calls,
     winners,
@@ -313,7 +373,6 @@ export async function getRoomState(code: string, playerToken?: string): Promise<
 
 /**
  * Host calls the next random uncalled number (1-90).
- * Prevents repeat calls via database query & transaction.
  */
 export async function callNextNumber(code: string, hostToken: string): Promise<CallRecord> {
   const db = await getDb();
@@ -342,14 +401,12 @@ export async function callNextNumber(code: string, hostToken: string): Promise<C
   }
 
   if (calledNumbers.size >= 90) {
-    // All numbers drawn
     db.run(`UPDATE rooms SET status = 'completed' WHERE id = ?`, [roomId]);
     saveDb();
     broadcastRoomState(normCode);
     throw new Error('All 90 numbers have been called!');
   }
 
-  // Find remaining uncalled numbers
   const pool: number[] = [];
   for (let n = 1; n <= 90; n++) {
     if (!calledNumbers.has(n)) {
@@ -405,13 +462,7 @@ export async function setAutoCallSpeed(code: string, hostToken: string, speed: n
 }
 
 /**
- * AUTO-VERIFIED PRIZE CLAIM:
- * - Server validates player token
- * - Server retrieves player ticket from database
- * - Server retrieves all called numbers
- * - Server checks if prize has already been won
- * - Server runs pure verification check
- * - Automatically accepts or rejects (no manual host verification required!)
+ * AUTO-VERIFIED PRIZE CLAIM (checks all tickets owned by player):
  */
 export async function claimPrize(
   code: string,
@@ -422,11 +473,12 @@ export async function claimPrize(
   const normCode = code.trim().toUpperCase();
   const playerHash = hashToken(playerToken);
 
-  const roomRes = db.exec(`SELECT id, status FROM rooms WHERE code = '${normCode}'`);
+  const roomRes = db.exec(`SELECT id, status, rewards_json FROM rooms WHERE code = '${normCode}'`);
   if (!roomRes.length || !roomRes[0].values.length) {
     throw new Error('Room not found.');
   }
-  const [roomId, roomStatus] = roomRes[0].values[0] as [string, string];
+  const [roomId, roomStatus, rewardsJson] = roomRes[0].values[0] as [string, string, string | null];
+  const rewards: RoomRewards = rewardsJson ? JSON.parse(rewardsJson) : DEFAULT_REWARDS;
 
   // Lookup player
   const playerRes = db.exec(
@@ -437,7 +489,7 @@ export async function claimPrize(
   }
 
   const [playerId, playerName, ticketJson] = playerRes[0].values[0] as [string, string, string];
-  const ticket = JSON.parse(ticketJson) as TicketGrid;
+  const tickets = parseTickets(ticketJson);
 
   // Check if this prize is ALREADY accepted in this room
   const existingWinnerRes = db.exec(
@@ -449,8 +501,7 @@ export async function claimPrize(
   if (existingWinnerRes.length && existingWinnerRes[0].values.length) {
     const winnerName = existingWinnerRes[0].values[0][0] as string;
     const msg = `${PRIZE_NAMES[prizeType]} has already been won by ${winnerName}!`;
-    
-    // Log the claim attempt as already claimed
+
     const claimId = crypto.randomUUID();
     const now = new Date().toISOString();
     db.run(
@@ -477,21 +528,21 @@ export async function claimPrize(
     }
   }
 
-  // AUTO-VERIFICATION PURE LOGIC CHECK
-  const result = verifyClaim(ticket, calledSet, prizeType);
+  // AUTO-VERIFICATION ACROSS ALL TICKETS
+  const result = verifyClaimMultiTicket(tickets, calledSet, prizeType);
   const now = new Date().toISOString();
   const claimId = crypto.randomUUID();
+  const ticketDisplayNum = (result.winningTicketIndex ?? 0) + 1;
+  const prizeReward = rewards[prizeType] ? ` (Reward: ${rewards[prizeType]})` : '';
 
   if (result.valid) {
-    // Valid claim -> ACCEPTED AUTOMATICALLY!
-    const msg = `Auto-Verified: ${playerName} won ${PRIZE_NAMES[prizeType]}!`;
+    const msg = `Auto-Verified: ${playerName} won ${PRIZE_NAMES[prizeType]} on Ticket #${ticketDisplayNum}!${prizeReward}`;
     db.run(
       `INSERT INTO claims (id, room_id, player_id, prize_type, status, numbers_json, message, created_at)
        VALUES (?, ?, ?, ?, 'accepted', ?, ?, ?)`,
       [claimId, roomId, playerId, prizeType, JSON.stringify(result.matchingNumbers), msg, now]
     );
 
-    // If Full House, mark game completed
     if (prizeType === 'full_house') {
       db.run(`UPDATE rooms SET status = 'completed', updated_at = ? WHERE id = ?`, [now, roomId]);
     }
@@ -503,11 +554,11 @@ export async function claimPrize(
       accepted: true,
       status: 'accepted',
       prizeType,
-      message: `🎉 BINGO! Your claim for ${PRIZE_NAMES[prizeType]} was AUTO-VERIFIED and ACCEPTED!`,
+      winningTicketIndex: result.winningTicketIndex,
+      message: `🎉 BINGO! Your claim for ${PRIZE_NAMES[prizeType]} was AUTO-VERIFIED on Ticket #${ticketDisplayNum}!${prizeReward}`,
       matchingNumbers: result.matchingNumbers,
     };
   } else {
-    // Bogey claim -> REJECTED AUTOMATICALLY!
     const msg = `Bogey Claim by ${playerName}: ${result.reason || 'Criteria not met.'}`;
     db.run(
       `INSERT INTO claims (id, room_id, player_id, prize_type, status, numbers_json, message, created_at)
@@ -522,14 +573,14 @@ export async function claimPrize(
       accepted: false,
       status: 'rejected_bogey',
       prizeType,
-      message: `⚠️ BOGEY CLAIM: ${result.reason || 'Your ticket does not satisfy this prize yet.'}`,
+      message: `⚠️ BOGEY CLAIM: ${result.reason || 'Criteria not met on your ticket(s).'}${tickets.length > 1 ? ` (Checked across all ${tickets.length} tickets)` : ''}`,
       matchingNumbers: result.matchingNumbers,
     };
   }
 }
 
 /**
- * Host resets the room for a fresh game with new tickets.
+ * Host resets the room for a fresh game, generating new tickets for each player according to their ticket count.
  */
 export async function resetRoom(code: string, hostToken: string) {
   const db = await getDb();
@@ -546,7 +597,6 @@ export async function resetRoom(code: string, hostToken: string) {
   const roomId = roomRes[0].values[0][0] as string;
   const now = new Date().toISOString();
 
-  // Reset calls and claims
   db.run(`DELETE FROM calls WHERE room_id = ?`, [roomId]);
   db.run(`DELETE FROM claims WHERE room_id = ?`, [roomId]);
   db.run(
@@ -555,16 +605,16 @@ export async function resetRoom(code: string, hostToken: string) {
   );
 
   // Generate fresh tickets for all existing players
-  const playersRes = db.exec(`SELECT id FROM players WHERE room_id = '${roomId}'`);
+  const playersRes = db.exec(`SELECT id, ticket_json FROM players WHERE room_id = '${roomId}'`);
   if (playersRes.length && playersRes[0].values.length) {
     for (const r of playersRes[0].values) {
       const pid = r[0] as string;
-      const newTicket = generateTambolaTicket();
-      db.run(`UPDATE players SET ticket_json = ? WHERE id = ?`, [JSON.stringify(newTicket), pid]);
+      const oldTickets = parseTickets(r[1] as string);
+      const newTickets = generateMultipleTickets(oldTickets.length);
+      db.run(`UPDATE players SET ticket_json = ? WHERE id = ?`, [JSON.stringify(newTickets), pid]);
     }
   }
 
   saveDb();
   broadcastRoomState(normCode);
 }
-

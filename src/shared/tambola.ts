@@ -489,3 +489,57 @@ export function verifyClaim(
   }
 }
 
+/**
+ * Generate multiple valid 3x9 tickets for a single player (e.g. 1 to 6 tickets).
+ */
+export function generateMultipleTickets(count: number = 1): TicketGrid[] {
+  const safeCount = Math.max(1, Math.min(6, Math.floor(count) || 1));
+  const tickets: TicketGrid[] = [];
+  for (let i = 0; i < safeCount; i++) {
+    tickets.push(generateTambolaTicket());
+  }
+  return tickets;
+}
+
+/**
+ * Auto-verifies a prize claim across all tickets owned by a player.
+ * Checks each ticket; if any ticket meets the win criteria, returns valid with that ticket's index.
+ */
+export function verifyClaimMultiTicket(
+  tickets: TicketGrid[],
+  calledNumbersSet: Set<number>,
+  prizeType: PrizeType
+): VerificationResult {
+  if (!tickets || tickets.length === 0) {
+    return {
+      valid: false,
+      matchingNumbers: [],
+      reason: 'No tickets found for player.',
+    };
+  }
+
+  let bestFailResult: VerificationResult | null = null;
+  let maxMatched = -1;
+
+  for (let i = 0; i < tickets.length; i++) {
+    const res = verifyClaim(tickets[i], calledNumbersSet, prizeType);
+    if (res.valid) {
+      return {
+        ...res,
+        winningTicketIndex: i,
+      };
+    }
+
+    if (res.matchingNumbers.length > maxMatched) {
+      maxMatched = res.matchingNumbers.length;
+      bestFailResult = {
+        ...res,
+        winningTicketIndex: i,
+      };
+    }
+  }
+
+  return bestFailResult || verifyClaim(tickets[0], calledNumbersSet, prizeType);
+}
+
+

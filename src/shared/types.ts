@@ -14,14 +14,32 @@ export const PRIZE_NAMES: Record<PrizeType, string> = {
 };
 
 export const PRIZE_DESCRIPTIONS: Record<PrizeType, string> = {
-  early_five: 'First player to mark any 5 called numbers on their ticket',
-  top_line: 'First player to mark all 5 numbers on the top row',
-  middle_line: 'First player to mark all 5 numbers on the middle row',
-  bottom_line: 'First player to mark all 5 numbers on the bottom row',
-  full_house: 'First player to mark all 15 numbers on their entire ticket',
+  early_five: 'Any 5 numbers marked on the ticket',
+  top_line: 'All 5 numbers on the top row',
+  middle_line: 'All 5 numbers on the middle row',
+  bottom_line: 'All 5 numbers on the bottom row',
+  full_house: 'All 15 numbers on the entire ticket',
 };
 
 export type TicketGrid = (number | null)[][]; // 3 rows x 9 columns
+
+export interface RoomRewards {
+  early_five?: string;
+  top_line?: string;
+  middle_line?: string;
+  bottom_line?: string;
+  full_house?: string;
+  ticket_price?: string;
+}
+
+export const DEFAULT_REWARDS: RoomRewards = {
+  early_five: '₹50',
+  top_line: '₹100',
+  middle_line: '₹100',
+  bottom_line: '₹100',
+  full_house: '₹500',
+  ticket_price: '₹20',
+};
 
 export interface CallRecord {
   number: number;
@@ -37,6 +55,8 @@ export interface WinnerInfo {
   prizeType: PrizeType;
   claimedAt: string;
   verifiedNumbers: number[];
+  ticketIndex?: number;
+  reward?: string;
 }
 
 export interface ClaimRecord {
@@ -49,6 +69,7 @@ export interface ClaimRecord {
   numbers: number[];
   message: string;
   createdAt: string;
+  ticketIndex?: number;
 }
 
 export interface PlayerPublic {
@@ -56,6 +77,7 @@ export interface PlayerPublic {
   name: string;
   isHost: boolean;
   joinedAt: string;
+  ticketCount: number;
 }
 
 export interface RoomState {
@@ -64,6 +86,7 @@ export interface RoomState {
   currentNumber: number | null;
   autoCallSpeed: number; // in seconds (0 = off)
   createdAt: string;
+  rewards: RoomRewards;
   players: PlayerPublic[];
   calls: CallRecord[];
   winners: Partial<Record<PrizeType, WinnerInfo>>;
@@ -72,7 +95,7 @@ export interface RoomState {
     id: string;
     name: string;
     isHost: boolean;
-    ticket: TicketGrid;
+    tickets: TicketGrid[];
   };
 }
 
@@ -80,5 +103,5 @@ export interface VerificationResult {
   valid: boolean;
   matchingNumbers: number[];
   reason?: string;
+  winningTicketIndex?: number;
 }
-
