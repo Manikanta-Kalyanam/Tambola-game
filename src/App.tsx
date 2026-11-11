@@ -98,6 +98,15 @@ export function App() {
           speakNumber(newState.currentNumber);
         }
 
+        // Detect newly won prizes across the room
+        if (prev?.winners && newState.winners) {
+          for (const [pType, win] of Object.entries(newState.winners)) {
+            if (win && !prev.winners[pType as PrizeType] && win.playerId !== session.playerId) {
+              playWinSound();
+            }
+          }
+        }
+
         // If server provided myPlayer with tickets
         if (newState.myPlayer?.tickets && newState.myPlayer.tickets.length > 0) {
           setMyTickets(newState.myPlayer.tickets);
