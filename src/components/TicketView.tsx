@@ -1,23 +1,49 @@
 import React, { useState } from 'react';
-import { TicketGrid } from '../shared/types';
-import { playDabSound, triggerHaptic } from '../utils/audio';
-import { Tag, Layers } from 'lucide-react';
+import confetti from 'canvas-confetti';
+import { TicketGrid, PrizeType, WinnerInfo, RoomRewards } from '../shared/types';
+import { playDabSound, triggerHaptic, playWinSound, playBogeySound } from '../utils/audio';
+import { Tag, Layers, Trophy, CheckCircle, AlertTriangle, Sparkles, Loader2 } from 'lucide-react';
 
 interface TicketViewProps {
   tickets: TicketGrid[];
   dabs: Set<string>; // Stored as `${ticketIndex}_${num}`
   calledNumbersSet: Set<number>;
   onToggleDab: (ticketIndex: number, num: number) => void;
+  winners?: Partial<Record<PrizeType, WinnerInfo>>;
+  rewards?: RoomRewards;
+  myPlayerId?: string;
+  onClaim?: (prizeType: PrizeType) => Promise<{
+    accepted: boolean;
+    status: string;
+    message: string;
+  }>;
   winningNumbersSet?: Set<number>;
 }
+
+const MINI_PRIZES: { type: PrizeType; short: string }[] = [
+  { type: 'early_five', short: 'Early 5' },
+  { type: 'top_line', short: 'Top Line' },
+  { type: 'middle_line', short: 'Mid Line' },
+  { type: 'bottom_line', short: 'Bot Line' },
+  { type: 'full_house', short: 'Full House' },
+];
 
 export const TicketView: React.FC<TicketViewProps> = ({
   tickets,
   dabs,
   calledNumbersSet,
   onToggleDab,
+  winners = {},
+  rewards = {},
+  myPlayerId,
+  onClaim,
 }) => {
   const [activeTicketIdx, setActiveTicketIdx] = useState<number>(0);
+  const [claimingPrize, setClaimingPrize] = useState<PrizeType | null>(null);
+  const [claimFeedback, setClaimFeedback] = useState<{
+    accepted: boolean;
+    message: string;
+  } | null>(null);
 
   const safeTickets = tickets && tickets.length > 0 ? tickets : [];
   const currentTicket = safeTickets[activeTicketIdx] || safeTickets[0];
@@ -56,18 +82,56 @@ export const TicketView: React.FC<TicketViewProps> = ({
     onToggleDab(activeTicketIdx, num);
   };
 
+  const handleClaimClick = async (prizeType: PrizeType) => {
+    if (!onClaim || claimingPrize) return;
+    setClaimingPrize(prizeType);
+    setClaimFeedback(null);
+
+    try {
+      const res = await onClaim(prizeType);
+      setClaimFeedback({
+        accepted: res.accepted,
+        message: res.message,
+      });
+
+      if (res.accepted) {
+        playWinSound();
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#e11d48', '#f59e0b', '#10b981', '#3b82f6', '#ec4899'],
+        });
+      } else {
+        playBogeySound();
+      }
+
+      setTimeout(() => {
+        setClaimFeedback(null);
+      }, 5000);
+    } catch (err: any) {
+      playBogeySound();
+      setClaimFeedback({
+        accepted: false,
+        message: err.message || 'Claim failed',
+      });
+    } finally {
+      setClaimingPrize(null);
+    }
+  };
+
   return (
     <div className="bg-slate-900/95 border border-slate-800 rounded-3xl p-3 sm:p-5 shadow-xl backdrop-blur-md">
       {/* Multiple Tickets Selector Tabs */}
       {safeTickets.length > 1 && (
-        <div className="mb-3">
-          <div className="flex items-center justify-between mb-1.5 px-0.5">
+        <div className="mb-2.5">
+          <div className="flex items-center justify-between mb-1 px-0.5">
             <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-rose-400" />
               <span>Your Tickets ({safeTickets.length} Total)</span>
             </span>
             <span className="text-[10px] text-slate-500 font-mono">
-              Tap to switch active ticket
+              Tap to switch
             </span>
           </div>
 
@@ -108,7 +172,7 @@ export const TicketView: React.FC<TicketViewProps> = ({
       )}
 
       {/* Ticket Header & Stats Bar */}
-      <div className="flex items-center justify-between gap-2 mb-2.5 px-0.5">
+      <div className="flex items-center justify-between gap-2 mb-2 px-0.5">
         <div className="flex items-center gap-2">
           <div className="p-1.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400">
             <Tag className="w-3.5 h-3.5" />
@@ -181,24 +245,86 @@ export const TicketView: React.FC<TicketViewProps> = ({
         </div>
       </div>
 
-      {/* Footer Info */}
-      <div className="flex items-center justify-between text-[10px] text-slate-400 mt-2 px-1">
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-rose-600 inline-block" />
-            <span>Marked</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-slate-700 inline-block" />
-            <span>Unmarked</span>
-          </span>
+      {/* Compact Mini Prize Buttons Directly Below Ticket (Mobile Friendly) */}
+      {onClaim && (
+        <div className="mt-3 pt-2 border-t border-slate-800/80">
+          <div className="flex items-center justify-between mb-1.5 px-0.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1">
+              <Trophy className="w-3 h-3" />
+              <span>Claim Prizes</span>
+            </span>
+            <span className="text-[9px] text-slate-500 font-mono">
+              Auto-Verified
+            </span>
+          </div>
+
+          <div className="grid grid-cols-5 gap-1 sm:gap-1.5">
+            {MINI_PRIZES.map(({ type, short }) => {
+              const winner = winners ? winners[type] : undefined;
+              const isWon = Boolean(winner);
+              const didIWin = isWon && winner?.playerId === myPlayerId;
+              const prizeReward = rewards ? rewards[type] : '';
+              const isPending = claimingPrize === type;
+
+              if (isWon) {
+                return (
+                  <div
+                    key={type}
+                    className={`py-1 px-1 rounded-xl text-center flex flex-col items-center justify-center border ${
+                      didIWin
+                        ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                        : 'bg-slate-950/60 border-slate-800/80 text-slate-500 opacity-60'
+                    }`}
+                  >
+                    <span className="text-[9px] sm:text-[10px] font-bold truncate leading-tight w-full">
+                      {short}
+                    </span>
+                    <span className="text-[8px] truncate leading-tight w-full opacity-80">
+                      {didIWin ? 'You Won!' : winner?.playerName}
+                    </span>
+                  </div>
+                );
+              }
+
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => handleClaimClick(type)}
+                  disabled={isPending}
+                  className="py-1.5 px-1 rounded-xl bg-gradient-to-r from-amber-500 to-rose-600 hover:from-amber-400 hover:to-rose-500 active:scale-90 text-white font-bold text-center flex flex-col items-center justify-center shadow-md transition-all border border-amber-400/30 disabled:opacity-50"
+                >
+                  <span className="text-[9px] sm:text-[10px] font-bold leading-tight truncate w-full">
+                    {short}
+                  </span>
+                  {prizeReward && (
+                    <span className="text-[8px] font-mono text-amber-200 leading-tight">
+                      {prizeReward}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {claimFeedback && (
+            <div
+              className={`mt-2 p-2 rounded-xl border text-[11px] font-semibold flex items-center gap-1.5 animate-pop ${
+                claimFeedback.accepted
+                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200'
+                  : 'bg-rose-500/15 border-rose-500/40 text-rose-200'
+              }`}
+            >
+              {claimFeedback.accepted ? (
+                <CheckCircle className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+              ) : (
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
+              )}
+              <span className="truncate">{claimFeedback.message}</span>
+            </div>
+          )}
         </div>
-        <span className="text-slate-500">
-          {safeTickets.length > 1
-            ? `Viewing Ticket ${activeTicketIdx + 1} of ${safeTickets.length}`
-            : 'Standard 3×9 Ticket'}
-        </span>
-      </div>
+      )}
     </div>
   );
 };

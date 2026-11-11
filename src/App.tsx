@@ -446,6 +446,10 @@ export function App() {
                 dabs={dabs}
                 calledNumbersSet={calledNumbersSet}
                 onToggleDab={handleToggleDab}
+                winners={roomState.winners}
+                rewards={roomState.rewards}
+                myPlayerId={session.playerId}
+                onClaim={handleClaimPrize}
                 winningNumbersSet={winningNumbersSet}
               />
             ) : session.isHost ? (

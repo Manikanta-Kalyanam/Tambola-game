@@ -26,38 +26,129 @@ export const DIGIT_WORDS = [
   'Nine',
 ];
 
+// Short 18+ Adult Comedy Party Banter Lines
+export const ADULT_COMEDY_LINES: Record<number, string> = {
+  1: "First time hurts!",
+  2: "One for each hand!",
+  3: "Menage a trois!",
+  4: "Down on all fours!",
+  5: "Give me a spank!",
+  6: "Sexy quickie!",
+  7: "Heaven in bed!",
+  8: "Late night date!",
+  9: "Naughty and fine!",
+  10: "Hard as a rock!",
+  11: "Legs in the air!",
+  12: "Dirty dozen!",
+  13: "Unlucky in the sheets!",
+  14: "Hot Valentine!",
+  15: "Wild and keen!",
+  16: "Sweet and dirty!",
+  17: "Stripper queen!",
+  18: "Legal now!",
+  19: "Goodbye teens, hello kinky!",
+  20: "Blindfold ready!",
+  21: "Handcuffs on!",
+  22: "Two in the bed!",
+  23: "Bite me free!",
+  24: "Beg for more!",
+  25: "Ride and dive!",
+  26: "Naughty tricks!",
+  27: "Bedroom heaven!",
+  28: "Panties off!",
+  29: "Taste so fine!",
+  30: "Down and dirty!",
+  31: "Pull my hair!",
+  32: "Sticky glue!",
+  33: "Double D!",
+  34: "Lock the bedroom door!",
+  35: "Wild wild ride!",
+  36: "Nice chest mix!",
+  37: "Hot as fire!",
+  38: "Heavyweight action!",
+  39: "Arch that spine!",
+  40: "Naughty after forty!",
+  41: "Spank that bun!",
+  42: "Naked with you!",
+  43: "Spank me please!",
+  44: "Open the back door!",
+  45: "Halfway to climax!",
+  46: "Lick those lips!",
+  47: "Midnight pleasures!",
+  48: "Hardcore session!",
+  49: "Prep for 69!",
+  50: "Fifty shades of naughty!",
+  51: "Morning wood fun!",
+  52: "Rubber on!",
+  53: "Kneel for me!",
+  54: "Hardcore on the floor!",
+  55: "Snakes alive in bed!",
+  56: "Kinky fix!",
+  57: "Sinners in heaven!",
+  58: "Don't pull out late!",
+  59: "Tastes so divine!",
+  60: "Three score naughty!",
+  61: "Tap that booty!",
+  62: "Lick the cream!",
+  63: "Strip for me!",
+  64: "Harder on the floor!",
+  65: "Wild bedroom drive!",
+  66: "Clickety click, take the trick!",
+  67: "Made in bed!",
+  68: "You do me, I owe you one!",
+  69: "Favorite position!",
+  70: "Still dirty at seventy!",
+  71: "Bang that drum!",
+  72: "Backdoor clue!",
+  73: "Wild wild spree!",
+  74: "Begging for more!",
+  75: "Keep the rhythm alive!",
+  76: "Naughty licks!",
+  77: "Double pleasure sticks!",
+  78: "Late night booty call!",
+  79: "Deep and steady!",
+  80: "Gandhi's spicy breakfast!",
+  81: "Hot as the sun!",
+  82: "Wet and ready!",
+  83: "Hands-free pleasure!",
+  84: "Push it deeper!",
+  85: "High sex drive!",
+  86: "Quick sex fix!",
+  87: "Wet in heaven!",
+  88: "Two fat melons!",
+  89: "Almost at climax!",
+  90: "Top of the house, Climax!",
+};
+
 /**
- * Returns the spoken call text for a number without taglines:
- * e.g. 64 -> "Six Four, 64"
- * e.g. 7 -> "Single Seven, 7"
- * e.g. 88 -> "Eight Eight, 88"
+ * Returns the spoken call text with digits and short 18+ comedy line:
+ * e.g. 64 -> "Six Four, 64! Harder on the floor!"
+ * e.g. 69 -> "Six Nine, 69! Favorite position!"
  */
 export function getNumberCallSpoken(num: number): string {
   if (num < 1 || num > 90) return `Number ${num}`;
-  if (num < 10) {
-    return `Single ${DIGIT_WORDS[num]}, ${num}`;
-  }
-  const d1 = Math.floor(num / 10);
-  const d2 = num % 10;
-  return `${DIGIT_WORDS[d1]} ${DIGIT_WORDS[d2]}, ${num}`;
+  const comedy = ADULT_COMEDY_LINES[num] || '';
+  const prefix =
+    num < 10
+      ? `Single ${DIGIT_WORDS[num]}, ${num}`
+      : `${DIGIT_WORDS[Math.floor(num / 10)]} ${DIGIT_WORDS[num % 10]}, ${num}`;
+  return comedy ? `${prefix}! ${comedy}` : prefix;
 }
 
 /**
- * Returns clean display text without taglines:
- * e.g. 64 -> "Six Four • 64"
- * e.g. 7 -> "Single Seven • 7"
+ * Returns clean display text with short 18+ adult comedy tagline:
+ * e.g. 64 -> "Six Four • 64 — Harder on the floor!"
  */
 export function getNumberCallDisplay(num: number): string {
   if (num < 1 || num > 90) return `${num}`;
-  if (num < 10) {
-    return `Single ${DIGIT_WORDS[num]} • ${num}`;
-  }
-  const d1 = Math.floor(num / 10);
-  const d2 = num % 10;
-  return `${DIGIT_WORDS[d1]} ${DIGIT_WORDS[d2]} • ${num}`;
+  const comedy = ADULT_COMEDY_LINES[num] || '';
+  const prefix =
+    num < 10
+      ? `Single ${DIGIT_WORDS[num]} • ${num}`
+      : `${DIGIT_WORDS[Math.floor(num / 10)]} ${DIGIT_WORDS[num % 10]} • ${num}`;
+  return comedy ? `${prefix} — ${comedy}` : prefix;
 }
 
-// Clean number labels without taglines
 export const NUMBER_NICKNAMES: Record<number, string> = new Proxy(
   {},
   {
