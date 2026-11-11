@@ -1,4 +1,4 @@
-import { NUMBER_NICKNAMES } from '../shared/tambola';
+import { getNumberCallSpoken } from '../shared/tambola';
 
 let audioCtx: AudioContext | null = null;
 let isMuted = false;
@@ -28,10 +28,19 @@ function getAudioContext(): AudioContext | null {
   return audioCtx;
 }
 
+export function triggerHaptic(pattern: number | number[] = 25): void {
+  try {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate(pattern);
+    }
+  } catch {}
+}
+
 /**
  * Tactile pop sound when marking a number on the ticket
  */
 export function playDabSound(): void {
+  triggerHaptic(25);
   if (isMuted) return;
   const ctx = getAudioContext();
   if (!ctx) return;
@@ -82,6 +91,7 @@ export function playNumberDrawnSound(): void {
  * Celebration chime when a prize claim is accepted
  */
 export function playWinSound(): void {
+  triggerHaptic([100, 50, 100, 50, 200]);
   if (isMuted) return;
   const ctx = getAudioContext();
   if (!ctx) return;
@@ -109,6 +119,7 @@ export function playWinSound(): void {
  * Low buzzer sound for a bogey claim
  */
 export function playBogeySound(): void {
+  triggerHaptic([180, 80, 180]);
   if (isMuted) return;
   const ctx = getAudioContext();
   if (!ctx) return;
@@ -131,17 +142,17 @@ export function playBogeySound(): void {
 }
 
 /**
- * Speaks the called number aloud with its nickname
+ * Speaks the called number aloud without any tagline, e.g.:
+ * "Six Four, 64" or "Single Seven, 7"
  */
 export function speakNumber(num: number): void {
   if (isMuted || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
-  window.speechSynthesis.cancel(); // Cancel any ongoing speech
-  const nickname = NUMBER_NICKNAMES[num];
-  const text = nickname ? `${num}! ${nickname}` : `Number ${num}`;
+  window.speechSynthesis.cancel();
+  const text = getNumberCallSpoken(num);
 
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 1.05;
+  utterance.rate = 0.95; // Clear natural pacing
   utterance.pitch = 1.0;
   window.speechSynthesis.speak(utterance);
 }

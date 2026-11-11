@@ -31,8 +31,18 @@ export const Header: React.FC<HeaderProps> = ({
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
-  const handleCopyLink = () => {
+  const handleCopyLink = async () => {
     const shareUrl = `${window.location.origin}/?room=${roomCode}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Tambola Multiplayer Live',
+          text: `Join my Tambola game! Room Code: ${roomCode}`,
+          url: shareUrl,
+        });
+        return;
+      } catch {}
+    }
     navigator.clipboard.writeText(shareUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
@@ -85,21 +95,21 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </button>
 
-          {/* Copy Invite Link */}
+          {/* Copy / Native Mobile Share Link */}
           <button
             onClick={handleCopyLink}
-            title="Copy Invite Link to share on WhatsApp or Network"
-            className="hidden sm:flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white transition-all active:scale-95"
+            title="Share Game Link via WhatsApp, Messages, or Copy"
+            className="flex items-center gap-1 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white transition-all active:scale-95"
           >
             {copiedLink ? (
               <>
                 <Check className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="text-emerald-400 text-[11px] font-bold">Link Copied!</span>
+                <span className="text-emerald-400 text-[10px] sm:text-[11px] font-bold">Copied!</span>
               </>
             ) : (
               <>
                 <Share2 className="w-3.5 h-3.5 text-rose-400" />
-                <span className="text-[11px]">Share Link</span>
+                <span className="text-[10px] sm:text-[11px]">Share</span>
               </>
             )}
           </button>

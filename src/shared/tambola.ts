@@ -13,99 +13,61 @@ export const COLUMN_RANGES: [number, number][] = [
   [80, 90],  // Col 8 (up to 90)
 ];
 
-// Classic Tambola call nicknames
-export const NUMBER_NICKNAMES: Record<number, string> = {
-  1: "Kelly's Eye, Number 1",
-  2: "One Little Duck, Number 2",
-  3: "Cup of Tea, Number 3",
-  4: "Knock at the Door, Number 4",
-  5: "Man Alive, Number 5",
-  6: "Half a Dozen, Number 6",
-  7: "Lucky Seven, Number 7",
-  8: "Garden Gate, Number 8",
-  9: "Doctor's Orders, Number 9",
-  10: "A Big Fat Hen, Number 10",
-  11: "Legs Eleven, Number 11",
-  12: "One Dozen, Number 12",
-  13: "Unlucky for Some, Number 13",
-  14: "Valentine's Day, Number 14",
-  15: "Young and Keen, Number 15",
-  16: "Sweet Sixteen, Number 16",
-  17: "Dancing Queen, Number 17",
-  18: "Now You Can Vote, Number 18",
-  19: "Goodbye Teens, Number 19",
-  20: "One Score, Number 20",
-  21: "Key of the Door, Number 21",
-  22: "Two Little Ducks, Number 22",
-  23: "Thee and Me, Number 23",
-  24: "Two Dozen, Number 24",
-  25: "Duck and Dive, Number 25",
-  26: "Pick and Mix, Number 26",
-  27: "Gateway to Heaven, Number 27",
-  28: "Over Weight, Number 28",
-  29: "Rise and Shine, Number 29",
-  30: "Dirty Gertie, Number 30",
-  31: "Get Up and Run, Number 31",
-  32: "Buckle My Shoe, Number 32",
-  33: "All the Threes, Number 33",
-  34: "Ask for More, Number 34",
-  35: "Jump and Jive, Number 35",
-  36: "Three Dozen, Number 36",
-  37: "More than Eleven, Number 37",
-  38: "Christmas Cake, Number 38",
-  39: "Steps, Number 39",
-  40: "Life Begins at 40",
-  41: "Time for Fun, Number 41",
-  42: "Winnie the Pooh, Number 42",
-  43: "Down on Your Knees, Number 43",
-  44: "Droopy Drawers, Number 44",
-  45: "Halfway There, Number 45",
-  46: "Up to Tricks, Number 46",
-  47: "Four and Seven, Number 47",
-  48: "Four Dozen, Number 48",
-  49: "Rise and Shine, Number 49",
-  50: "Half a Century, Number 50",
-  51: "Tweak of the Thumb, Number 51",
-  52: "Danny La Rue, Number 52",
-  53: "Stuck in a Tree, Number 53",
-  54: "Clean the Floor, Number 54",
-  55: "Snakes Alive, All the Fives 55",
-  56: "Shotts Bus, Number 56",
-  57: "Heinz Varieties, Number 57",
-  58: "Make Them Wait, Number 58",
-  59: "Brighton Line, Number 59",
-  60: "Five Dozen, Three Score 60",
-  61: "Baker's Bun, Number 61",
-  62: "Turn the Screw, Number 62",
-  63: "Tickle Me 63",
-  64: "Red Raw, Number 64",
-  65: "Old Age Pension, Number 65",
-  66: "Clickety Click, Number 66",
-  67: "Made in Heaven, Number 67",
-  68: "Saving Grace, Number 68",
-  69: "Either Way Up, Number 69",
-  70: "Lucky Blind, Three Score & Ten 70",
-  71: "Bang on the Drum, Number 71",
-  72: "Six Dozen, Number 72",
-  73: "Queen B, Number 73",
-  74: "Candy Store, Number 74",
-  75: "Strive and Strive, Number 75",
-  76: "Trombones, Number 76",
-  77: "Sunset Strip, Lucky Double 77",
-  78: "Heaven's Gate, Number 78",
-  79: "One More Time, Number 79",
-  80: "Eight and Blank, Gandhi's Breakfast 80",
-  81: "Stop and Run, Number 81",
-  82: "Fat Lady with a Duck, Number 82",
-  83: "Time for Tea, Number 83",
-  84: "Seven Dozen, Number 84",
-  85: "Staying Alive, Number 85",
-  86: "Between the Sticks, Number 86",
-  87: "Torquay in Devon, Number 87",
-  88: "Two Fat Ladies, Number 88",
-  89: "Nearly There, Number 89",
-  90: "Top of the House, Blind 90",
-};
+export const DIGIT_WORDS = [
+  'Zero',
+  'One',
+  'Two',
+  'Three',
+  'Four',
+  'Five',
+  'Six',
+  'Seven',
+  'Eight',
+  'Nine',
+];
+
+/**
+ * Returns the spoken call text for a number without taglines:
+ * e.g. 64 -> "Six Four, 64"
+ * e.g. 7 -> "Single Seven, 7"
+ * e.g. 88 -> "Eight Eight, 88"
+ */
+export function getNumberCallSpoken(num: number): string {
+  if (num < 1 || num > 90) return `Number ${num}`;
+  if (num < 10) {
+    return `Single ${DIGIT_WORDS[num]}, ${num}`;
+  }
+  const d1 = Math.floor(num / 10);
+  const d2 = num % 10;
+  return `${DIGIT_WORDS[d1]} ${DIGIT_WORDS[d2]}, ${num}`;
+}
+
+/**
+ * Returns clean display text without taglines:
+ * e.g. 64 -> "Six Four • 64"
+ * e.g. 7 -> "Single Seven • 7"
+ */
+export function getNumberCallDisplay(num: number): string {
+  if (num < 1 || num > 90) return `${num}`;
+  if (num < 10) {
+    return `Single ${DIGIT_WORDS[num]} • ${num}`;
+  }
+  const d1 = Math.floor(num / 10);
+  const d2 = num % 10;
+  return `${DIGIT_WORDS[d1]} ${DIGIT_WORDS[d2]} • ${num}`;
+}
+
+// Clean number labels without taglines
+export const NUMBER_NICKNAMES: Record<number, string> = new Proxy(
+  {},
+  {
+    get: (_, prop) => {
+      const n = Number(prop);
+      if (isNaN(n)) return '';
+      return getNumberCallDisplay(n);
+    },
+  }
+);
 
 /**
  * Generate a random integer between min and max inclusive
@@ -493,6 +455,7 @@ export function verifyClaim(
  * Generate multiple valid 3x9 tickets for a single player (e.g. 1 to 6 tickets).
  */
 export function generateMultipleTickets(count: number = 1): TicketGrid[] {
+  if (count <= 0) return [];
   const safeCount = Math.max(1, Math.min(6, Math.floor(count) || 1));
   const tickets: TicketGrid[] = [];
   for (let i = 0; i < safeCount; i++) {

@@ -33,6 +33,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 }) => {
   const [tab, setTab] = useState<'create' | 'join'>('create');
   const [hostName, setHostName] = useState('');
+  const [hostIsPlaying, setHostIsPlaying] = useState<boolean>(true);
   const [hostTicketCount, setHostTicketCount] = useState<number>(1);
   const [roomCode, setRoomCode] = useState('');
   const [playerName, setPlayerName] = useState('');
@@ -59,7 +60,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onCreateRoom(hostName, hostTicketCount, rewards);
+    await onCreateRoom(hostName, hostIsPlaying ? hostTicketCount : 0, rewards);
   };
 
   const handleJoin = async (e: React.FormEvent) => {
@@ -179,34 +180,71 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 />
               </div>
 
-              {/* Multiple Tickets Selector for Host */}
+              {/* Host Play / Not Play Toggle */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                    <Ticket className="w-3.5 h-3.5 text-rose-400" />
-                    <span>Your Tickets to Play</span>
-                  </label>
-                  <span className="text-[10px] text-amber-400 font-mono font-bold">
-                    {hostTicketCount} {hostTicketCount === 1 ? 'Ticket' : 'Tickets'}
-                  </span>
-                </div>
-                <div className="grid grid-cols-6 gap-1.5">
-                  {[1, 2, 3, 4, 5, 6].map((num) => (
-                    <button
-                      key={num}
-                      type="button"
-                      onClick={() => setHostTicketCount(num)}
-                      className={`py-2 rounded-xl text-xs font-bold font-mono transition-all ${
-                        hostTicketCount === num
-                          ? 'bg-rose-600 text-white border-2 border-rose-400 shadow-md shadow-rose-600/30'
-                          : 'bg-slate-950/70 text-slate-300 border border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      {num}
-                    </button>
-                  ))}
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Host Participation
+                </label>
+                <div className="grid grid-cols-2 p-1 bg-slate-950 rounded-xl border border-slate-800 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setHostIsPlaying(true)}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      hostIsPlaying
+                        ? 'bg-rose-600 text-white shadow'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <span>🎮 Host Plays (Has Ticket)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHostIsPlaying(false)}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      !hostIsPlaying
+                        ? 'bg-amber-600 text-white shadow'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <span>🎙️ Host Only (Not Play)</span>
+                  </button>
                 </div>
               </div>
+
+              {/* Multiple Tickets Selector for Host (only if Host Plays) */}
+              {hostIsPlaying ? (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                      <Ticket className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Your Tickets to Play</span>
+                    </label>
+                    <span className="text-[10px] text-amber-400 font-mono font-bold">
+                      {hostTicketCount} {hostTicketCount === 1 ? 'Ticket' : 'Tickets'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-6 gap-1.5">
+                    {[1, 2, 3, 4, 5, 6].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setHostTicketCount(num)}
+                        className={`py-2 rounded-xl text-xs font-bold font-mono transition-all ${
+                          hostTicketCount === num
+                            ? 'bg-rose-600 text-white border-2 border-rose-400 shadow-md shadow-rose-600/30'
+                            : 'bg-slate-950/70 text-slate-300 border border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300">
+                  🎙️ <strong>Caller Only Mode</strong>: You will manage the room and call balls without holding a ticket.
+                </div>
+              )}
 
               {/* Pricing & Rewards Customizer (Host control) */}
               <div className="pt-1">

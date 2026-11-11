@@ -84,7 +84,7 @@ export async function createRoom(
 ) {
   const db = await getDb();
   const trimmedName = hostName.trim() || 'Host';
-  const safeCount = Math.max(1, Math.min(6, Math.floor(Number(ticketCount)) || 1));
+  const safeCount = Number(ticketCount) === 0 ? 0 : Math.max(1, Math.min(6, Math.floor(Number(ticketCount)) || 1));
   const roomRewards: RoomRewards = { ...DEFAULT_REWARDS, ...(rewards || {}) };
 
   let code = generateRoomCode();

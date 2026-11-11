@@ -399,7 +399,7 @@ export function App() {
             }`}
           >
             <Ticket className="w-4 h-4" />
-            <span>Tickets ({myTickets.length})</span>
+            <span>{myTickets.length > 0 ? `Tickets (${myTickets.length})` : session.isHost ? 'Host' : 'Ticket'}</span>
           </button>
           <button
             onClick={() => setMobileTab('prizes')}
@@ -446,9 +446,18 @@ export function App() {
                 dabs={dabs}
                 calledNumbersSet={calledNumbersSet}
                 onToggleDab={handleToggleDab}
-                onAutoDabAllCalled={handleAutoDabAllCalled}
                 winningNumbersSet={winningNumbersSet}
               />
+            ) : session.isHost ? (
+              <div className="p-6 text-center bg-slate-900/90 border border-slate-800 rounded-3xl">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-2 text-xl font-bold">
+                  🎙️
+                </div>
+                <h4 className="text-sm font-bold text-white mb-1">Host / Caller Mode (Not Playing)</h4>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  You are calling balls and managing the game without a ticket. All room controls, master board, and auto-verified claims are active!
+                </p>
+              </div>
             ) : (
               <div className="p-6 text-center bg-slate-900 border border-slate-800 rounded-3xl">
                 <div className="animate-spin w-7 h-7 border-2 border-rose-500 border-t-transparent rounded-full mx-auto mb-2" />

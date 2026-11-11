@@ -1,5 +1,5 @@
 import React from 'react';
-import { NUMBER_NICKNAMES } from '../shared/tambola';
+import { getNumberCallDisplay } from '../shared/tambola';
 import { Radio } from 'lucide-react';
 
 interface CurrentBallProps {
@@ -9,7 +9,7 @@ interface CurrentBallProps {
 }
 
 export const CurrentBall: React.FC<CurrentBallProps> = ({ currentNumber, callOrder, totalCalls }) => {
-  const nickname = currentNumber ? NUMBER_NICKNAMES[currentNumber] : null;
+  const displayText = currentNumber ? getNumberCallDisplay(currentNumber) : null;
 
   return (
     <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl flex flex-col items-center justify-center text-center relative overflow-hidden backdrop-blur-md">
@@ -35,10 +35,10 @@ export const CurrentBall: React.FC<CurrentBallProps> = ({ currentNumber, callOrd
             </div>
           </div>
 
-          {/* Caller Nickname */}
+          {/* Spoken Word Clean Display */}
           <div className="mt-3 px-3 py-1 rounded-full bg-slate-950/80 border border-slate-800 max-w-xs">
-            <p className="text-xs sm:text-sm font-bold text-amber-300 truncate">
-              {nickname || `Number ${currentNumber}`}
+            <p className="text-xs sm:text-sm font-bold text-amber-300 font-mono tracking-wide truncate">
+              {displayText || `Number ${currentNumber}`}
             </p>
           </div>
 
