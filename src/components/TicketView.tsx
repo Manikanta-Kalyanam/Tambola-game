@@ -237,8 +237,8 @@ export const TicketView: React.FC<TicketViewProps> = ({
               key={tIdx}
               className="bg-slate-900/95 border border-slate-800 rounded-3xl p-3 sm:p-5 shadow-xl backdrop-blur-md relative"
             >
-              {/* STICKY TICKET HEADER - Sticks cleanly while scrolling through this ticket */}
-              <div className="sticky top-[108px] sm:top-[68px] z-20 -mx-1 px-3 py-2 rounded-2xl bg-slate-900/95 border border-slate-800/90 shadow-md backdrop-blur-md mb-2.5 flex items-center justify-between">
+              {/* STICKY TICKET HEADER - Sticks cleanly at top of screen while scrolling through tickets */}
+              <div className="sticky top-2 sm:top-4 z-20 -mx-1 px-3 py-1.5 rounded-2xl bg-slate-900/95 border border-slate-800/90 shadow-md backdrop-blur-md mb-2 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-lg bg-rose-500/20 border border-rose-500/30 text-rose-300 flex items-center justify-center text-xs font-mono font-black">
                     #{tIdx + 1}

@@ -3,6 +3,7 @@ import { HomeScreen } from './components/HomeScreen';
 import { Header } from './components/Header';
 import { TicketView } from './components/TicketView';
 import { CurrentBall } from './components/CurrentBall';
+import { FloatingBall } from './components/FloatingBall';
 import { ClaimsBar } from './components/ClaimsBar';
 import { BoardView } from './components/BoardView';
 import { CallHistory } from './components/CallHistory';
@@ -44,8 +45,35 @@ export function App() {
 
   // Mobile navigation tab: 'tickets' | 'prizes' | 'board' | 'players'
   const [mobileTab, setMobileTab] = useState<'tickets' | 'prizes' | 'board' | 'players'>('tickets');
+  const [showHeader, setShowHeader] = useState(true);
 
   const prevLastCallRef = useRef<number | null>(null);
+  const roomStateRef = useRef<RoomState | null>(null);
+  const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    roomStateRef.current = roomState;
+  }, [roomState]);
+
+  // Hide top header when scrolling down on mobile to give clean full screen for tickets
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      if (currentScrollY < 40) {
+        setShowHeader(true);
+      } else if (currentScrollY > lastScrollY.current + 8) {
+        // Scrolling down -> hide top bar
+        setShowHeader(false);
+      } else if (currentScrollY < lastScrollY.current - 12) {
+        // Scrolling up -> show top bar
+        setShowHeader(true);
+      }
+      lastScrollY.current = currentScrollY;
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Set of called numbers for quick lookups
   const calledNumbersSet = useMemo(() => {
@@ -53,14 +81,20 @@ export function App() {
     return new Set(roomState.calls.map((c) => c.number));
   }, [roomState?.calls]);
 
-  // Set of verified winning numbers
+  // Set of verified winning numbers (bulletproof array check)
   const winningNumbersSet = useMemo(() => {
     const s = new Set<number>();
     if (!roomState?.winners) return s;
-    for (const win of Object.values(roomState.winners)) {
-      if (win?.verifiedNumbers) {
-        win.verifiedNumbers.forEach((n) => s.add(n));
+    try {
+      for (const win of Object.values(roomState.winners)) {
+        if (win?.verifiedNumbers && Array.isArray(win.verifiedNumbers)) {
+          win.verifiedNumbers.forEach((n) => {
+            if (typeof n === 'number') s.add(n);
+          });
+        }
       }
+    } catch (e) {
+      console.warn('winningNumbersSet error:', e);
     }
     return s;
   }, [roomState?.winners]);
@@ -91,30 +125,44 @@ export function App() {
     const streamUrl = `/api/rooms/${session.roomCode}/stream?token=${session.playerToken}`;
 
     const updateState = (newState: RoomState) => {
-      setRoomState((prev) => {
-        // Detect new ball call for audio & speech
+      if (!newState) return;
+      const prev = roomStateRef.current;
+
+      // 1. Audio notifications executed safely OUTSIDE of React state transitions
+      try {
         if (newState.currentNumber && newState.currentNumber !== prevLastCallRef.current) {
           prevLastCallRef.current = newState.currentNumber;
           playNumberDrawnSound();
           speakNumber(newState.currentNumber);
         }
+      } catch (e) {
+        console.warn('Audio play error:', e);
+      }
 
-        // Detect newly won prizes across the room
+      // 2. Winner notification chime (if someone else in the room won a prize)
+      try {
         if (prev?.winners && newState.winners) {
           for (const [pType, win] of Object.entries(newState.winners)) {
-            if (win && !prev.winners[pType as PrizeType] && win.playerId !== session.playerId) {
+            if (
+              win &&
+              !prev.winners[pType as PrizeType] &&
+              win.playerId !== session?.playerId
+            ) {
               playWinSound();
             }
           }
         }
+      } catch (e) {
+        console.warn('Winner chime error:', e);
+      }
 
-        // If server provided myPlayer with tickets
-        if (newState.myPlayer?.tickets !== undefined) {
-          setMyTickets(newState.myPlayer.tickets);
-        }
+      // 3. Pure React state updates
+      setRoomState(newState);
 
-        return newState;
-      });
+      if (newState.myPlayer?.tickets !== undefined) {
+        setMyTickets(newState.myPlayer.tickets);
+      }
+
       setIsConnected(true);
     };
 
@@ -349,58 +397,31 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-rose-500 selection:text-white pb-28 sm:pb-8">
-      {/* Header Bar */}
-      <Header
-        roomCode={session.roomCode}
-        playerName={session.playerName}
-        isHost={session.isHost}
-        onOpenResults={() => setShowResultsModal(true)}
-        onLeaveRoom={handleLeaveRoom}
-        isConnected={isConnected}
-        totalCalls={roomState.calls.length}
-      />
-
-      {/* Sticky Active Ball Bar - Visible when scrolling down so players never lose sight of called numbers */}
-      <div className="sticky top-[57px] z-30 bg-slate-900/95 border-b border-slate-800/90 px-3 py-2 backdrop-blur-md shadow-md">
-        <div className="max-w-lg sm:max-w-4xl w-full mx-auto flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5 overflow-hidden">
-            {roomState.currentNumber !== null ? (
-              <>
-                <div className="w-8 h-8 rounded-full bingo-ball flex-shrink-0 flex items-center justify-center shadow-md">
-                  <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center">
-                    <span className="font-mono font-black text-xs text-slate-950">
-                      {roomState.currentNumber}
-                    </span>
-                  </div>
-                </div>
-                <div className="overflow-hidden">
-                  <div className="text-xs sm:text-sm font-bold text-amber-300 font-mono truncate">
-                    {getNumberCallDisplay(roomState.currentNumber)}
-                  </div>
-                  <div className="text-[10px] text-slate-400 font-mono">
-                    Ball #{roomState.calls.length} of 90
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center gap-2 text-slate-400 text-xs font-mono">
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                <span>Ready! Waiting for host to call first ball...</span>
-              </div>
-            )}
-          </div>
-
-          {session.isHost && (
-            <button
-              onClick={handleCallNumber}
-              disabled={callingNumber || roomState.calls.length >= 90}
-              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 active:scale-95 text-white font-bold text-xs flex items-center gap-1 shadow-md transition-all flex-shrink-0 disabled:opacity-50"
-            >
-              <span>Draw Next</span>
-            </button>
-          )}
-        </div>
+      {/* Top Header Bar - Hides smoothly on scroll down in mobile for clean ticket view */}
+      <div
+        className={`sticky top-0 z-40 transition-transform duration-300 ${
+          showHeader ? 'translate-y-0' : '-translate-y-full sm:translate-y-0'
+        }`}
+      >
+        <Header
+          roomCode={session.roomCode}
+          playerName={session.playerName}
+          isHost={session.isHost}
+          onOpenResults={() => setShowResultsModal(true)}
+          onLeaveRoom={handleLeaveRoom}
+          isConnected={isConnected}
+          totalCalls={roomState.calls.length}
+        />
       </div>
+
+      {/* Floating Ball Widget: Only number floating on screen, zero UI blockage */}
+      <FloatingBall
+        currentNumber={roomState.currentNumber}
+        totalCalls={roomState.calls.length}
+        isHost={session.isHost}
+        onCallNext={handleCallNumber}
+        callingNumber={callingNumber}
+      />
 
       {/* Main Mobile-First Container */}
       <main className="flex-1 max-w-lg sm:max-w-4xl w-full mx-auto p-3 sm:p-5 space-y-3.5">
