@@ -93,3 +93,4 @@ export const FloatingBall: React.FC<FloatingBallProps> = ({
     </div>
   );
 };
+
